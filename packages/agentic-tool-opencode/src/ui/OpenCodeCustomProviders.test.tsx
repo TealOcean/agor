@@ -63,12 +63,12 @@ describe('OpenCodeCustomProviders', () => {
   it('opens the add form and the edit form', () => {
     renderSection({});
     fireEvent.click(screen.getByRole('button', { name: 'Add custom provider' }));
-    expect(screen.getByLabelText('Custom provider ID')).not.toBeDisabled();
+    expect(screen.getByLabelText('Provider ID')).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(
       within(screen.getByTestId('custom-provider-omlx')).getByRole('button', { name: 'Edit' })
     );
-    expect(screen.getByLabelText('Custom provider ID')).toHaveValue('omlx');
+    expect(screen.getByLabelText('Provider ID')).toHaveValue('omlx');
   });
 
   it('edits a provider whose ID is "new" instead of opening the add form', () => {
@@ -88,8 +88,8 @@ describe('OpenCodeCustomProviders', () => {
     fireEvent.click(
       within(screen.getByTestId('custom-provider-new')).getByRole('button', { name: 'Edit' })
     );
-    expect(screen.getByLabelText('Custom provider ID')).toHaveValue('new');
-    expect(screen.getByLabelText('Custom provider ID')).toBeDisabled();
+    expect(screen.getByLabelText('Provider ID')).toHaveValue('new');
+    expect(screen.getByLabelText('Provider ID')).toBeDisabled();
   });
 
   it('removes after confirmation and publishes the new settings', async () => {
@@ -135,7 +135,7 @@ describe('OpenCodeCustomProviders', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add custom provider' }));
-    fireEvent.change(screen.getByLabelText('Custom provider ID'), { target: { value: 'lab' } });
+    fireEvent.change(screen.getByLabelText('Provider ID'), { target: { value: 'lab' } });
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lab' } });
     fireEvent.change(screen.getByLabelText('Base URL'), { target: { value: 'http://lab/v1' } });
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk' } });
@@ -147,7 +147,7 @@ describe('OpenCodeCustomProviders', () => {
     expect(
       await screen.findByText("Saved, but the API key couldn't be stored. Try again.")
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText('Custom provider ID')).toBeNull();
+    expect(screen.queryByLabelText('Provider ID')).toBeNull();
   });
 
   it('shows the config-file error', () => {

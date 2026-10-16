@@ -51,6 +51,23 @@ describe('mergeDiscoveredModels', () => {
 });
 
 describe('OpenCodeCustomProviderForm', () => {
+  it('shows a visible label and a hint for every field', () => {
+    renderForm({ create: vi.fn(), patch: vi.fn() });
+    for (const label of [
+      'Provider ID',
+      'Display name',
+      'API type',
+      'Base URL',
+      'API key',
+      'Models',
+    ]) {
+      expect(screen.getByText(label, { selector: 'label, label > span' })).toBeVisible();
+    }
+    expect(screen.getByText(/can't be changed later/)).toBeInTheDocument();
+    expect(screen.getByText(/usually ending in \/v1/)).toBeInTheDocument();
+    expect(screen.getByText(/Leave blank if the server doesn't need one/)).toBeInTheDocument();
+  });
+
   it('discovers models with the typed key, then creates the provider', async () => {
     const settings = { runtime: 'available' };
     const service = {
@@ -61,7 +78,7 @@ describe('OpenCodeCustomProviderForm', () => {
       patch: vi.fn(),
     };
     const { onSaved } = renderForm(service);
-    fill('Custom provider ID', 'omlx');
+    fill('Provider ID', 'omlx');
     fill('Display name', 'oMLX');
     fill('Base URL', 'http://192.168.1.175:8000/v1/');
     fill('API key', 'sk-test');
@@ -109,7 +126,7 @@ describe('OpenCodeCustomProviderForm', () => {
   it('blocks saving without an enabled model and shows the validation message', async () => {
     const service = { create: vi.fn(), patch: vi.fn() };
     renderForm(service);
-    fill('Custom provider ID', 'omlx');
+    fill('Provider ID', 'omlx');
     fill('Display name', 'oMLX');
     fill('Base URL', 'http://h/v1');
     fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
@@ -131,7 +148,7 @@ describe('OpenCodeCustomProviderForm', () => {
       patch: vi.fn().mockResolvedValue({ runtime: 'available' }),
     };
     renderForm(service, existing);
-    expect(screen.getByLabelText('Custom provider ID')).toBeDisabled();
+    expect(screen.getByLabelText('Provider ID')).toBeDisabled();
     expect(screen.getByLabelText('API key')).toHaveValue('');
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh models' }));

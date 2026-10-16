@@ -6,8 +6,8 @@ import type {
   OpenCodeCustomProviderProbeResult,
   OpenCodeProviderSettings,
 } from '@agor/core/types';
-import { Alert, Button, Checkbox, Input, Radio, Space, Tag, Typography } from 'antd';
-import { useState } from 'react';
+import { Alert, Button, Checkbox, Form, Input, Radio, Space, Tag, Typography } from 'antd';
+import { useId, useState } from 'react';
 import {
   CustomProviderPatchSchema,
   CustomProviderSchema,
@@ -74,6 +74,8 @@ export function OpenCodeCustomProviderForm({
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const formId = useId();
+  const fieldId = (field: string) => `${formId}-${field}`;
 
   const discover = async () => {
     setBusy(true);
@@ -148,82 +150,137 @@ export function OpenCodeCustomProviderForm({
   };
 
   return (
-    <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-      <Input
-        aria-label="Custom provider ID"
-        placeholder="omlx"
-        value={id}
-        disabled={Boolean(existing)}
-        onChange={(event) => setId(event.target.value)}
-      />
-      <Input
-        aria-label="Display name"
-        placeholder="oMLX (Mac Studio)"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <div role="radiogroup" aria-label="API type">
-        <Radio.Group value={apiType} onChange={(event) => setApiType(event.target.value)}>
-          <Radio value="chat-completions">Chat Completions</Radio>
-          <Radio value="responses">Responses</Radio>
-        </Radio.Group>
-      </div>
-      <Input
-        aria-label="Base URL"
-        placeholder="http://192.168.1.175:8000/v1"
-        value={baseURL}
-        onChange={(event) => setBaseURL(event.target.value)}
-      />
-      <Input.Password
-        aria-label="API key"
-        autoComplete="new-password"
-        placeholder={
-          existing?.credentialPresence === 'present' ? 'Saved — leave blank to keep' : 'Optional'
-        }
-        value={apiKey}
-        onChange={(event) => setApiKey(event.target.value)}
-      />
-      {existing?.credentialPresence === 'present' && (
-        <Checkbox checked={clearApiKey} onChange={(event) => setClearApiKey(event.target.checked)}>
-          Clear saved key
-        </Checkbox>
-      )}
-      <Button onClick={() => void discover()} loading={busy} disabled={!baseURL.trim()}>
-        {existing ? 'Refresh models' : 'Discover models'}
-      </Button>
-      {notice && <Typography.Text type="secondary">{notice}</Typography.Text>}
-      {models.map((model) => (
-        <Space key={model.id} size="small">
-          <Checkbox
-            checked={model.enabled}
-            onChange={(event) =>
-              setModels((current) =>
-                current.map((entry) =>
-                  entry.id === model.id ? { ...entry, enabled: event.target.checked } : entry
-                )
-              )
-            }
-          >
-            {model.id}
-          </Checkbox>
-          {model.isNew && <Tag>new</Tag>}
-        </Space>
-      ))}
-      <Space.Compact style={{ width: '100%' }}>
+    <Form layout="vertical" component={false}>
+      <Form.Item
+        label="Provider ID"
+        htmlFor={fieldId('id')}
+        required={!existing}
+        extra="Short name OpenCode uses for this provider, e.g. omlx. Lowercase letters, digits, - and _. It can't be changed later."
+      >
         <Input
-          aria-label="Model ID to add"
-          value={manualModelId}
-          onChange={(event) => setManualModelId(event.target.value)}
+          id={fieldId('id')}
+          placeholder="omlx"
+          value={id}
+          disabled={Boolean(existing)}
+          onChange={(event) => setId(event.target.value)}
         />
-        <Button onClick={addManualModel}>Add model</Button>
-      </Space.Compact>
-      {error && <Alert type="error" showIcon title={error} />}
+      </Form.Item>
+      <Form.Item
+        label="Display name"
+        htmlFor={fieldId('name')}
+        required
+        extra="Shown in Agor's provider list and model picker."
+      >
+        <Input
+          id={fieldId('name')}
+          placeholder="oMLX (Mac Studio)"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </Form.Item>
+      <Form.Item
+        label={<span id={fieldId('api-type')}>API type</span>}
+        required
+        extra="The endpoint OpenCode sends prompts to. Chat Completions (/chat/completions) works with most local servers; pick Responses (/responses) only if the server supports it."
+      >
+        <div role="radiogroup" aria-labelledby={fieldId('api-type')}>
+          <Radio.Group value={apiType} onChange={(event) => setApiType(event.target.value)}>
+            <Radio value="chat-completions">Chat Completions</Radio>
+            <Radio value="responses">Responses</Radio>
+          </Radio.Group>
+        </div>
+      </Form.Item>
+      <Form.Item
+        label="Base URL"
+        htmlFor={fieldId('base-url')}
+        required
+        extra="The server's OpenAI-compatible root, usually ending in /v1. Models are listed from <base URL>/models."
+      >
+        <Input
+          id={fieldId('base-url')}
+          placeholder="http://192.168.1.175:8000/v1"
+          value={baseURL}
+          onChange={(event) => setBaseURL(event.target.value)}
+        />
+      </Form.Item>
+      <Form.Item
+        label="API key"
+        htmlFor={fieldId('api-key')}
+        extra={
+          existing?.credentialPresence === 'present'
+            ? 'A key is saved. Leave blank to keep it, type a new one to replace it, or tick Clear saved key.'
+            : "Sent as a bearer token. Leave blank if the server doesn't need one. Stored in OpenCode's auth.json and never shown again."
+        }
+      >
+        <Input.Password
+          id={fieldId('api-key')}
+          autoComplete="new-password"
+          placeholder={
+            existing?.credentialPresence === 'present' ? 'Saved — leave blank to keep' : 'Optional'
+          }
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+      </Form.Item>
+      {existing?.credentialPresence === 'present' && (
+        <Form.Item>
+          <Checkbox
+            checked={clearApiKey}
+            onChange={(event) => setClearApiKey(event.target.checked)}
+          >
+            Clear saved key
+          </Checkbox>
+        </Form.Item>
+      )}
+      <Form.Item
+        label={<span id={fieldId('models')}>Models</span>}
+        required
+        extra="Ticked models appear in OpenCode's model picker. Discover lists them from the server (fill in the base URL and key first), or add model IDs by hand below."
+      >
+        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+          <Button onClick={() => void discover()} loading={busy} disabled={!baseURL.trim()}>
+            {existing ? 'Refresh models' : 'Discover models'}
+          </Button>
+          {notice && <Typography.Text type="secondary">{notice}</Typography.Text>}
+          {models.map((model) => (
+            <Space key={model.id} size="small">
+              <Checkbox
+                checked={model.enabled}
+                onChange={(event) =>
+                  setModels((current) =>
+                    current.map((entry) =>
+                      entry.id === model.id ? { ...entry, enabled: event.target.checked } : entry
+                    )
+                  )
+                }
+              >
+                {model.id}
+              </Checkbox>
+              {model.isNew && <Tag>new</Tag>}
+            </Space>
+          ))}
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              aria-label="Model ID to add"
+              placeholder="Model ID to add, e.g. mlx-community/Qwen3-Coder-30B"
+              value={manualModelId}
+              onChange={(event) => setManualModelId(event.target.value)}
+            />
+            <Button onClick={addManualModel}>Add model</Button>
+          </Space.Compact>
+        </Space>
+      </Form.Item>
+      {error && (
+        <Form.Item>
+          <Alert type="error" showIcon title={error} />
+        </Form.Item>
+      )}
       <Space>
         <Button type="primary" onClick={() => void save()} loading={busy}>
           Save provider
         </Button>
         <Button onClick={onCancel}>Cancel</Button>
       </Space>
-    </Space>
+    </Form>
   );
 }
