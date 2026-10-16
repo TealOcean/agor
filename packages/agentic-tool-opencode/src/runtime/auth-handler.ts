@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
+  OpenCodeCustomProviderEntry,
+  OpenCodeCustomProviderErrorCode,
   OpenCodeModelCatalog,
   OpenCodeModelPair,
   OpenCodeOAuthAuthorization,
@@ -9,9 +11,21 @@ import type {
   OpenCodeProviderDiscovery,
 } from '@agor/core/types';
 import type { createOpencodeClient } from '@opencode-ai/sdk/v2';
+import {
+  CUSTOM_PROVIDER_MESSAGES,
+  isSupportedCustomProvider,
+} from '../shared/custom-provider-schema.js';
 import { createOpenCodeKnownModelCatalog } from '../shared/known-models.js';
 import type { OpenCodeAuthPayload } from './auth-payload.js';
+import { probeOpenAICompatibleModels } from './custom-provider-probe.js';
 import {
+  CustomProviderError,
+  readCustomProviders,
+  removeCustomProvider,
+  saveCustomProvider,
+} from './custom-providers.js';
+import {
+  createOpenCodeSanitizer,
   ensureOpenCodeDataHome as defaultEnsureOpenCodeDataHome,
   startManagedOpenCodeServer as defaultStartManagedOpenCodeServer,
   verifyOpenCodeAuthFileBoundary as defaultVerifyOpenCodeAuthFileBoundary,
@@ -25,10 +39,26 @@ export interface OpenCodeCommandOptions {
   dryRun?: boolean;
 }
 
+export interface OpenCodeCustomProviderRuntime {
+  read: typeof readCustomProviders;
+  save: typeof saveCustomProvider;
+  remove: typeof removeCustomProvider;
+  probe: typeof probeOpenAICompatibleModels;
+}
+
+const DEFAULT_CUSTOM_PROVIDER_RUNTIME: OpenCodeCustomProviderRuntime = {
+  read: readCustomProviders,
+  save: saveCustomProvider,
+  remove: removeCustomProvider,
+  probe: probeOpenAICompatibleModels,
+};
+
 export interface OpenCodeAuthRuntimeDependencies {
   ensureOpenCodeDataHome: typeof defaultEnsureOpenCodeDataHome;
   startManagedOpenCodeServer: typeof defaultStartManagedOpenCodeServer;
   verifyOpenCodeAuthFileBoundary: typeof defaultVerifyOpenCodeAuthFileBoundary;
+  /** Fork: custom provider store; defaults to the real file store and probe. */
+  customProviders?: OpenCodeCustomProviderRuntime;
 }
 
 const DEFAULT_AUTH_RUNTIME: OpenCodeAuthRuntimeDependencies = {
@@ -152,15 +182,76 @@ async function savedCredentialProviderIds(dataHome: string): Promise<Set<string>
   }
 }
 
+function customProviderRuntime(runtime: OpenCodeAuthRuntimeDependencies) {
+  return runtime.customProviders ?? DEFAULT_CUSTOM_PROVIDER_RUNTIME;
+}
+
+type CustomProviderFailure = { code: OpenCodeCustomProviderErrorCode; message: string };
+type CustomProviderOutcome<T> =
+  | { ok: true; value: T }
+  | { ok: false; failure: CustomProviderFailure };
+
+function customProviderFailure(
+  failure: CustomProviderFailure,
+  secrets: readonly unknown[]
+): { success: false; error: CustomProviderFailure } {
+  return {
+    success: false,
+    error: { code: failure.code, message: createOpenCodeSanitizer(secrets).text(failure.message) },
+  };
+}
+
+async function readCustomProvidersSafely(
+  dataHome: string,
+  runtime: OpenCodeAuthRuntimeDependencies
+): Promise<{ entries: OpenCodeCustomProviderEntry[]; error?: string }> {
+  try {
+    return { entries: await customProviderRuntime(runtime).read(dataHome) };
+  } catch (error) {
+    if (error instanceof CustomProviderError) return { entries: [], error: error.message };
+    throw error;
+  }
+}
+
+async function savedApiKey(dataHome: string, providerId: string): Promise<string | undefined> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(join(dataHome, 'opencode', 'auth.json'), 'utf8')
+    ) as Record<string, { type?: unknown; key?: unknown } | undefined>;
+    const entry = parsed?.[providerId];
+    return entry?.type === 'api' && typeof entry.key === 'string' ? entry.key : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function discoverModels(
   dataHome: string,
   runtime = DEFAULT_AUTH_RUNTIME
 ): Promise<OpenCodeModelCatalog> {
   await runtime.ensureOpenCodeDataHome(dataHome);
   await runtime.verifyOpenCodeAuthFileBoundary(dataHome, { allowMissing: true });
+  const catalog = createOpenCodeKnownModelCatalog(await savedCredentialProviderIds(dataHome));
+  const custom = await readCustomProvidersSafely(dataHome, runtime);
+  if (custom.error) console.warn(`[OpenCode] Custom providers unavailable: ${custom.error}`);
+  const supported = custom.entries.filter(isSupportedCustomProvider);
+  const customIds = new Set(supported.map((provider) => provider.id));
   return {
     runtimeVersion: OPENCODE_VERSION,
-    ...createOpenCodeKnownModelCatalog(await savedCredentialProviderIds(dataHome)),
+    ...catalog,
+    providers: [
+      ...catalog.providers.filter((provider) => !customIds.has(provider.id)),
+      ...supported.map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        availableForSelection: true,
+        models: provider.models.map((model) => ({
+          id: model.id,
+          name: model.name ?? model.id,
+          status: 'active' as const,
+        })),
+      })),
+    ],
   };
 }
 
@@ -177,7 +268,8 @@ function configuredPair(model: string | undefined): OpenCodeModelPair | undefine
 async function readConfigurationSnapshot(
   client: V2Client,
   dataHome: string,
-  directory: string
+  directory: string,
+  runtime: OpenCodeAuthRuntimeDependencies = DEFAULT_AUTH_RUNTIME
 ): Promise<OpenCodeProviderDiscovery> {
   const [modelsResponse, configResponse, providerResponse, authResponse, credentialProviderIds] =
     await Promise.all([
@@ -261,12 +353,18 @@ async function readConfigurationSnapshot(
           modelId: suggestedProvider.suggestedModel,
         };
 
+  const custom = await readCustomProvidersSafely(dataHome, runtime);
   return {
     runtime: 'available',
     runtimeVersion: OPENCODE_VERSION,
     ...(projectConfigured ? { projectConfigured } : {}),
     ...(suggestedSelection ? { suggestedSelection } : {}),
     providers,
+    customProviders: custom.entries.map((entry) => ({
+      ...entry,
+      credentialPresence: credentialPresence(credentialProviderIds, entry.id),
+    })),
+    ...(custom.error ? { customProvidersError: custom.error } : {}),
   };
 }
 
@@ -278,10 +376,158 @@ async function discover(
   return withFreshClient(
     dataHome,
     [],
-    (client) => readConfigurationSnapshot(client, dataHome, directory),
+    (client) => readConfigurationSnapshot(client, dataHome, directory, runtime),
     directory,
     runtime
   );
+}
+
+type SaveCustomProviderParams = Extract<
+  OpenCodeAuthPayload['params'],
+  { operation: 'save-custom-provider' }
+>;
+type RemoveCustomProviderParams = Extract<
+  OpenCodeAuthPayload['params'],
+  { operation: 'remove-custom-provider' }
+>;
+type ProbeCustomProviderParams = Extract<
+  OpenCodeAuthPayload['params'],
+  { operation: 'probe-custom-provider-models' }
+>;
+
+async function saveCustomProviderOperation(
+  dataHome: string,
+  params: SaveCustomProviderParams,
+  runtime: OpenCodeAuthRuntimeDependencies
+) {
+  const { create, provider, apiKey, clearApiKey } = params;
+  const secrets = [apiKey ?? ''];
+  if (apiKey && clearApiKey) {
+    return customProviderFailure(
+      {
+        code: 'CUSTOM_PROVIDER_INVALID',
+        message: 'Choose either a new API key or Clear key, not both.',
+      },
+      secrets
+    );
+  }
+  const store = customProviderRuntime(runtime);
+  const outcome = await withFreshClient<CustomProviderOutcome<OpenCodeProviderDiscovery>>(
+    dataHome,
+    secrets,
+    async (client) => {
+      if (create) {
+        const listed = await client.provider.list({ directory: dataHome });
+        if (listed.error || !listed.data) throw new Error('OpenCode provider list unavailable');
+        if (listed.data.all.some((existing) => existing.id === provider.id)) {
+          return {
+            ok: false,
+            failure: {
+              code: 'CUSTOM_PROVIDER_ID_TAKEN',
+              message: CUSTOM_PROVIDER_MESSAGES.idTaken(provider.id),
+            },
+          };
+        }
+      }
+      try {
+        await store.save(dataHome, provider, { create });
+      } catch (error) {
+        if (error instanceof CustomProviderError) {
+          return { ok: false, failure: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+      if (apiKey || clearApiKey) {
+        try {
+          const response = apiKey
+            ? await client.auth.set({
+                providerID: provider.id,
+                auth: { type: 'api', key: apiKey },
+              })
+            : await client.auth.remove({ providerID: provider.id });
+          if (response.error || response.data !== true) {
+            throw new Error('auth mutation rejected');
+          }
+          await runtime.verifyOpenCodeAuthFileBoundary(dataHome, { allowMissing: !apiKey });
+        } catch {
+          return {
+            ok: false,
+            failure: {
+              code: 'CUSTOM_PROVIDER_KEY_NOT_SAVED',
+              message: CUSTOM_PROVIDER_MESSAGES.keyNotSaved,
+            },
+          };
+        }
+      }
+      return {
+        ok: true,
+        value: await readConfigurationSnapshot(client, dataHome, dataHome, runtime),
+      };
+    },
+    dataHome,
+    runtime
+  );
+  return outcome.ok
+    ? { success: true, data: outcome.value }
+    : customProviderFailure(outcome.failure, secrets);
+}
+
+async function removeCustomProviderOperation(
+  dataHome: string,
+  params: RemoveCustomProviderParams,
+  runtime: OpenCodeAuthRuntimeDependencies
+) {
+  const { providerId } = params;
+  const store = customProviderRuntime(runtime);
+  const outcome = await withFreshClient<CustomProviderOutcome<OpenCodeProviderDiscovery>>(
+    dataHome,
+    [],
+    async (client) => {
+      try {
+        await store.remove(dataHome, providerId);
+      } catch (error) {
+        if (error instanceof CustomProviderError) {
+          return { ok: false, failure: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+      if ((await savedCredentialProviderIds(dataHome))?.has(providerId)) {
+        // A key left behind is harmless and stays removable from the provider list.
+        await client.auth.remove({ providerID: providerId }).catch(() => undefined);
+      }
+      return {
+        ok: true,
+        value: await readConfigurationSnapshot(client, dataHome, dataHome, runtime),
+      };
+    },
+    dataHome,
+    runtime
+  );
+  return outcome.ok
+    ? { success: true, data: outcome.value }
+    : customProviderFailure(outcome.failure, []);
+}
+
+async function probeCustomProviderOperation(
+  dataHome: string,
+  params: ProbeCustomProviderParams,
+  runtime: OpenCodeAuthRuntimeDependencies
+) {
+  const { baseURL, providerId } = params;
+  let apiKey = params.apiKey;
+  if (!apiKey && providerId) {
+    await runtime.verifyOpenCodeAuthFileBoundary(dataHome, { allowMissing: true });
+    apiKey = await savedApiKey(dataHome, providerId);
+  }
+  try {
+    const models = await customProviderRuntime(runtime).probe(baseURL, apiKey);
+    return { success: true, data: { models } };
+  } catch (error) {
+    if (error instanceof CustomProviderError) {
+      return customProviderFailure({ code: error.code, message: error.message }, [apiKey ?? '']);
+    }
+    throw error;
+  }
 }
 
 export async function handleOpenCodeAuth(
@@ -310,6 +556,16 @@ export async function handleOpenCodeAuth(
 
     if (payload.params.operation === 'read-model-catalog') {
       return { success: true, data: await discoverModels(payload.dataHome, runtime) };
+    }
+
+    if (payload.params.operation === 'save-custom-provider') {
+      return await saveCustomProviderOperation(payload.dataHome, payload.params, runtime);
+    }
+    if (payload.params.operation === 'remove-custom-provider') {
+      return await removeCustomProviderOperation(payload.dataHome, payload.params, runtime);
+    }
+    if (payload.params.operation === 'probe-custom-provider-models') {
+      return await probeCustomProviderOperation(payload.dataHome, payload.params, runtime);
     }
 
     if (payload.params.operation === 'connect-oauth') {
@@ -354,7 +610,7 @@ export async function handleOpenCodeAuth(
         await runtime.verifyOpenCodeAuthFileBoundary(payload.dataHome, {
           allowMissing: payload.params.operation === 'disconnect',
         });
-        return readConfigurationSnapshot(client, payload.dataHome, payload.dataHome);
+        return readConfigurationSnapshot(client, payload.dataHome, payload.dataHome, runtime);
       },
       payload.dataHome,
       runtime
@@ -451,7 +707,7 @@ export async function handleOpenCodeOAuth(
           throw new Error('OpenCode rejected OAuth callback');
         }
         await runtime.verifyOpenCodeAuthFileBoundary(payload.dataHome);
-        return readConfigurationSnapshot(client, payload.dataHome, payload.dataHome);
+        return readConfigurationSnapshot(client, payload.dataHome, payload.dataHome, runtime);
       },
       payload.dataHome,
       runtime

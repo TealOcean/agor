@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  CustomProviderBaseURLSchema,
+  CustomProviderSchema,
+} from '../shared/custom-provider-schema.js';
 
 export const OpenCodeAuthParamsSchema = z.discriminatedUnion('operation', [
   z.object({
@@ -21,6 +25,23 @@ export const OpenCodeAuthParamsSchema = z.discriminatedUnion('operation', [
     providerId: z.string().trim().min(1).max(200),
     method: z.number().int().nonnegative(),
     inputs: z.record(z.string(), z.string()).optional(),
+  }),
+  z.object({
+    operation: z.literal('save-custom-provider'),
+    create: z.boolean(),
+    provider: CustomProviderSchema,
+    apiKey: z.string().trim().min(1).optional(),
+    clearApiKey: z.boolean().optional(),
+  }),
+  z.object({
+    operation: z.literal('remove-custom-provider'),
+    providerId: z.string().trim().min(1).max(64),
+  }),
+  z.object({
+    operation: z.literal('probe-custom-provider-models'),
+    baseURL: CustomProviderBaseURLSchema,
+    apiKey: z.string().trim().min(1).optional(),
+    providerId: z.string().trim().min(1).max(64).optional(),
   }),
 ]);
 

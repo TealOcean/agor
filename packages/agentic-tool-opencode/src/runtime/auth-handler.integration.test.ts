@@ -230,6 +230,7 @@ describe('opencode.auth executor command', () => {
         runtimeVersion: OPENCODE_VERSION,
         projectConfigured: { providerId: 'openai', modelId: 'gpt-next' },
         suggestedSelection: { providerId: 'openai', modelId: 'gpt-next' },
+        customProviders: [],
         providers: [
           {
             id: 'openai',
