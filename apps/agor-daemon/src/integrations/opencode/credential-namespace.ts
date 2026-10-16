@@ -29,6 +29,13 @@ const OPENCODE_EXECUTOR_ENV_KEYS = [
   'LC_CTYPE',
   'NODE_ENV',
   'LOG_LEVEL',
+  // Managed agentic-tool runtime markers (see env-inheritance.ts). Without them
+  // the executor skips the managed OpenCode package, scans PATH for a binary and
+  // imports the SDK by bare specifier, so provider discovery fails.
+  'AGOR_VERSION',
+  'AGOR_AGENTIC_TOOLS_DIR',
+  'AGOR_MANAGED_AGENTIC_TOOLS',
+  'AGOR_OPENCODE_PATH',
 ] as const;
 
 export type AuthenticatedOpenCodeSubjectContext = OpenCodeCredentialNamespace & {
