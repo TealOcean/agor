@@ -214,6 +214,17 @@ export async function ensureOpenCodeDataHome(dataHome: string): Promise<void> {
   await ensureOwnedPrivateDirectory(boundary.homeDir, join(boundary.dataHome, 'opencode'));
 }
 
+/** Ensures `<dataHome>/xdg-config/opencode` (0700, owned, no symlinks) and returns its path. */
+export async function ensureOpenCodeConfigDirectory(dataHome: string): Promise<string> {
+  const boundary = resolveOpenCodeNativeBoundary(dataHome);
+  await ensureOpenCodeDataHome(boundary.dataHome);
+  const xdgConfig = join(boundary.dataHome, 'xdg-config');
+  const opencodeConfig = join(xdgConfig, 'opencode');
+  await ensureOwnedPrivateDirectory(boundary.homeDir, xdgConfig);
+  await ensureOwnedPrivateDirectory(boundary.homeDir, opencodeConfig);
+  return opencodeConfig;
+}
+
 export async function prepareOpenCodeNativeState(dataHome: string): Promise<void> {
   const boundary = resolveOpenCodeNativeBoundary(dataHome);
   await ensureOpenCodeDataHome(boundary.dataHome);
