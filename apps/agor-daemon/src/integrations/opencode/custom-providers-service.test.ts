@@ -158,6 +158,23 @@ describe('OpenCode custom providers service', () => {
     expect(result).toEqual({ models: ['a'] });
   });
 
+  it('serializes save and remove through the mutation slot, but not probes', async () => {
+    const { id: _id, ...fields } = provider;
+    await runWithTenantContext('tenant-a', async () => {
+      await service().create({ provider } as never, params);
+      await service().patch('omlx', { provider: fields } as never, params);
+      await service().remove('omlx', params);
+    });
+    expect(containment.reserve).toHaveBeenCalledTimes(3);
+
+    containment.reserve.mockClear();
+    runCommand.mockResolvedValue({ success: true, data: { models: [] } });
+    await runWithTenantContext('tenant-a', () =>
+      service().create({ probe: { baseURL: 'http://h/v1' } } as never, params)
+    );
+    expect(containment.reserve).not.toHaveBeenCalled();
+  });
+
   it('turns CUSTOM_PROVIDER_* executor errors into BadRequest with the message and code', async () => {
     runCommand.mockResolvedValue({
       success: false,
