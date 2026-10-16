@@ -508,6 +508,29 @@ async function removeCustomProviderOperation(
     : customProviderFailure(outcome.failure, []);
 }
 
+function urlOrigin(value: string): string | undefined {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A saved key only goes back to its own custom provider's origin, never to an arbitrary URL. */
+async function probeMayUseSavedKey(
+  dataHome: string,
+  providerId: string,
+  baseURL: string,
+  runtime: OpenCodeAuthRuntimeDependencies
+): Promise<boolean> {
+  const { entries } = await readCustomProvidersSafely(dataHome, runtime);
+  const provider = entries
+    .filter(isSupportedCustomProvider)
+    .find((entry) => entry.id === providerId);
+  const origin = urlOrigin(baseURL);
+  return Boolean(provider && origin && urlOrigin(provider.baseURL) === origin);
+}
+
 async function probeCustomProviderOperation(
   dataHome: string,
   params: ProbeCustomProviderParams,
@@ -515,7 +538,11 @@ async function probeCustomProviderOperation(
 ) {
   const { baseURL, providerId } = params;
   let apiKey = params.apiKey;
-  if (!apiKey && providerId) {
+  if (
+    !apiKey &&
+    providerId &&
+    (await probeMayUseSavedKey(dataHome, providerId, baseURL, runtime))
+  ) {
     await runtime.verifyOpenCodeAuthFileBoundary(dataHome, { allowMissing: true });
     apiKey = await savedApiKey(dataHome, providerId);
   }

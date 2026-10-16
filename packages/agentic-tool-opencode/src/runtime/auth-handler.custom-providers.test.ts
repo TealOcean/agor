@@ -204,6 +204,30 @@ describe('custom provider executor operations', () => {
     expect(result).toEqual({ success: true, data: { models: ['a', 'b'] } });
   });
 
+  it('never sends a built-in provider key to a probe URL', async () => {
+    fs.readAuthFile.mockResolvedValue(
+      JSON.stringify({ openai: { type: 'api', key: 'sk-openai' } })
+    );
+    store.probe.mockResolvedValue([]);
+    await run({
+      operation: 'probe-custom-provider-models',
+      baseURL: 'https://attacker.example/v1',
+      providerId: 'openai',
+    });
+    expect(store.probe).toHaveBeenCalledWith('https://attacker.example/v1', undefined);
+  });
+
+  it('does not send a saved custom key to a different origin', async () => {
+    fs.readAuthFile.mockResolvedValue(JSON.stringify({ omlx: { type: 'api', key: 'sk-saved' } }));
+    store.probe.mockResolvedValue([]);
+    await run({
+      operation: 'probe-custom-provider-models',
+      baseURL: 'https://attacker.example/v1',
+      providerId: 'omlx',
+    });
+    expect(store.probe).toHaveBeenCalledWith('https://attacker.example/v1', undefined);
+  });
+
   it('redacts the key from probe error messages', async () => {
     store.probe.mockRejectedValue(
       new CustomProviderError('CUSTOM_PROVIDER_UNREACHABLE', "Couldn't reach http://h (sk-typed).")
