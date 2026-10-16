@@ -26,8 +26,9 @@ export function OpenCodeCustomProviders({
   const [error, setError] = useState<string>();
   const entries: OpenCodeCustomProviderListing[] = settings.customProviders ?? [];
 
-  const saved = (next: OpenCodeProviderSettings) => {
+  const saved = (next: OpenCodeProviderSettings, warning?: string) => {
     setEditing(undefined);
+    setError(warning);
     onSettings(next);
   };
 

@@ -104,6 +104,52 @@ describe('OpenCodeCustomProviders', () => {
     expect(service.remove).toHaveBeenCalledWith('omlx');
   });
 
+  it('closes the form, refreshes the list and warns when the provider saved but its key did not', async () => {
+    const refreshed = {
+      ...(settings as object),
+      customProviders: [
+        {
+          id: 'lab',
+          name: 'Lab',
+          apiType: 'chat-completions',
+          baseURL: 'http://lab/v1',
+          models: [{ id: 'm' }],
+          credentialPresence: 'absent',
+        },
+      ],
+    };
+    const keyNotSaved = Object.assign(
+      new Error("Saved, but the API key couldn't be stored. Try again."),
+      { data: { code: 'CUSTOM_PROVIDER_KEY_NOT_SAVED' } }
+    );
+    const customProviders = { create: vi.fn().mockRejectedValue(keyNotSaved) };
+    const auth = { find: vi.fn().mockResolvedValue(refreshed) };
+    const client = {
+      service: vi.fn((path: string) => (path === 'opencode-auth' ? auth : customProviders)),
+    } as unknown as AgorClient;
+    const onSettings = vi.fn();
+    render(
+      <AntApp>
+        <OpenCodeCustomProviders client={client} settings={settings} onSettings={onSettings} />
+      </AntApp>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add custom provider' }));
+    fireEvent.change(screen.getByLabelText('Custom provider ID'), { target: { value: 'lab' } });
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lab' } });
+    fireEvent.change(screen.getByLabelText('Base URL'), { target: { value: 'http://lab/v1' } });
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk' } });
+    fireEvent.change(screen.getByLabelText('Model ID to add'), { target: { value: 'm' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+
+    await waitFor(() => expect(onSettings).toHaveBeenCalledWith(refreshed));
+    expect(
+      await screen.findByText("Saved, but the API key couldn't be stored. Try again.")
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Custom provider ID')).toBeNull();
+  });
+
   it('shows the config-file error', () => {
     renderSection({}, {
       ...(settings as object),

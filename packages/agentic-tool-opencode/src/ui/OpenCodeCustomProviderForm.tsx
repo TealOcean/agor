@@ -35,6 +35,10 @@ export function mergeDiscoveredModels(
   ];
 }
 
+function errorCode(error: unknown): unknown {
+  return (error as { data?: { code?: unknown } } | undefined)?.data?.code;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
@@ -49,7 +53,8 @@ export function OpenCodeCustomProviderForm({
 }: {
   client: AgorClient;
   existing?: OpenCodeCustomProvider & { credentialPresence: OpenCodeCredentialPresence };
-  onSaved: (settings: OpenCodeProviderSettings) => void;
+  /** `warning` is set when the provider saved but something after it (the key) did not. */
+  onSaved: (settings: OpenCodeProviderSettings, warning?: string) => void;
   onCancel: () => void;
 }) {
   const service = client.service('opencode-custom-providers');
@@ -127,6 +132,15 @@ export function OpenCodeCustomProviderForm({
           })) as OpenCodeProviderSettings);
       onSaved(settings);
     } catch (failure) {
+      if (errorCode(failure) === 'CUSTOM_PROVIDER_KEY_NOT_SAVED') {
+        // The definition is on disk: refresh so it can be edited instead of re-created.
+        try {
+          onSaved(await client.service('opencode-auth').find(), errorMessage(failure));
+          return;
+        } catch {
+          // Fall through to the inline error.
+        }
+      }
       setError(errorMessage(failure));
     } finally {
       setBusy(false);
