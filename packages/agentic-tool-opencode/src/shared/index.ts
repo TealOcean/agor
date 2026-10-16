@@ -1,4 +1,16 @@
 export {
+  apiTypeForNpm,
+  CUSTOM_PROVIDER_ID_PATTERN,
+  CUSTOM_PROVIDER_MESSAGES,
+  CUSTOM_PROVIDER_NPM,
+  CustomProviderBaseURLSchema,
+  CustomProviderPatchSchema,
+  CustomProviderSchema,
+  customProviderValidationMessage,
+  isSupportedCustomProvider,
+  normalizeCustomProviderBaseURL,
+} from './custom-provider-schema.js';
+export {
   createOpenCodeExecutorContext,
   createOpenCodeManagedExecutorContext,
   isOpenCodeManagedExecutorContext,
@@ -7,7 +19,6 @@ export {
   parseOpenCodeExecutorContext,
 } from './executor-context.js';
 export { OPENCODE_VERSION } from './known-models.js';
-
 export {
   hasCompleteOpenCodeModelConfig,
   OPENCODE_MODEL_CONFIG_PAIR_ERROR,

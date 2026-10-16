@@ -85,6 +85,10 @@ export interface OpenCodeProviderDiscovery {
   projectConfigured?: OpenCodeModelPair;
   suggestedSelection?: OpenCodeModelPair;
   providers: OpenCodeProviderConnection[];
+  /** Providers defined in the global opencode.json (fork: custom providers). */
+  customProviders?: OpenCodeCustomProviderListing[];
+  /** Set when opencode.json could not be read; custom providers are then unknown. */
+  customProvidersError?: string;
 }
 
 export type OpenCodeCredentialIsolation =
@@ -110,3 +114,68 @@ export interface OpenCodeUnsupportedSettings {
 export type OpenCodeProviderSettings =
   | (OpenCodeProviderDiscovery & { isolation: OpenCodeCredentialIsolation })
   | OpenCodeUnsupportedSettings;
+
+export type OpenCodeCustomProviderApiType = 'chat-completions' | 'responses';
+
+export interface OpenCodeCustomProviderModel {
+  id: string;
+  /** Display name; omitted when it equals the ID. */
+  name?: string;
+}
+
+/** An OpenAI-compatible provider defined in OpenCode's global config by Agor. */
+export interface OpenCodeCustomProvider {
+  id: string;
+  name: string;
+  apiType: OpenCodeCustomProviderApiType;
+  baseURL: string;
+  models: OpenCodeCustomProviderModel[];
+}
+
+/** A config-file provider Agor cannot edit (other npm package or missing base URL). */
+export interface OpenCodeUnsupportedCustomProvider {
+  id: string;
+  name: string;
+  npm: string;
+  unsupported: true;
+}
+
+export type OpenCodeCustomProviderEntry =
+  | OpenCodeCustomProvider
+  | OpenCodeUnsupportedCustomProvider;
+
+export type OpenCodeCustomProviderListing = OpenCodeCustomProviderEntry & {
+  credentialPresence: OpenCodeCredentialPresence;
+};
+
+export type OpenCodeCustomProviderErrorCode =
+  | 'CUSTOM_PROVIDER_INVALID'
+  | 'CUSTOM_PROVIDER_ID_TAKEN'
+  | 'CUSTOM_PROVIDER_NOT_FOUND'
+  | 'CUSTOM_PROVIDER_CONFIG_UNREADABLE'
+  | 'CUSTOM_PROVIDER_KEY_NOT_SAVED'
+  | 'CUSTOM_PROVIDER_UNREACHABLE'
+  | 'CUSTOM_PROVIDER_TIMEOUT'
+  | 'CUSTOM_PROVIDER_UNAUTHORIZED'
+  | 'CUSTOM_PROVIDER_NO_MODEL_LIST'
+  | 'CUSTOM_PROVIDER_BAD_RESPONSE'
+  | 'CUSTOM_PROVIDER_REDIRECT';
+
+export interface OpenCodeCustomProviderProbeRequest {
+  probe: { baseURL: string; apiKey?: string; providerId?: string };
+}
+
+export interface OpenCodeCustomProviderProbeResult {
+  models: string[];
+}
+
+export interface OpenCodeCustomProviderCreateRequest {
+  provider: OpenCodeCustomProvider;
+  apiKey?: string;
+}
+
+export interface OpenCodeCustomProviderPatchRequest {
+  provider: Omit<OpenCodeCustomProvider, 'id'>;
+  apiKey?: string;
+  clearApiKey?: boolean;
+}
