@@ -105,7 +105,9 @@ export const CustomProviderPatchSchema = z.strictObject(providerFields);
 export function customProviderValidationMessage(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue) return 'Invalid custom provider.';
-  const field = issue.path.find((segment) => typeof segment === 'string');
+  const fields = issue.path.filter((segment): segment is string => typeof segment === 'string');
+  // Model-list issues name the list; otherwise the innermost field (requests nest the provider).
+  const field = fields.includes('models') ? 'models' : fields.at(-1);
   return field ? `${field}: ${issue.message}` : issue.message;
 }
 

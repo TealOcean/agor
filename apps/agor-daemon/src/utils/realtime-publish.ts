@@ -326,6 +326,7 @@ export const REDIS_FEATHERS_DENIED_PATHS = new Set([
   'claude-auth/oauth',
   'claude-auth/logout',
   'opencode-auth',
+  'opencode-custom-providers',
   'terminals',
 ]);
 

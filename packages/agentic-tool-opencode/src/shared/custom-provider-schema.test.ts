@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   apiTypeForNpm,
   CUSTOM_PROVIDER_NPM,
@@ -52,6 +53,16 @@ describe('custom provider schema', () => {
       expect(customProviderValidationMessage(duplicate.error)).toMatch(/models: .*duplicate/i);
     }
     expect(CustomProviderSchema.safeParse({ ...valid, models: [] }).success).toBe(false);
+  });
+
+  it('names the innermost field when the provider is nested in a request', () => {
+    const nested = z.object({ provider: CustomProviderSchema }).safeParse({
+      provider: { ...valid, id: 'Bad ID' },
+    });
+    expect(nested.success).toBe(false);
+    if (!nested.success) {
+      expect(customProviderValidationMessage(nested.error)).toMatch(/^id: /);
+    }
   });
 
   it('maps API types to npm packages and back', () => {

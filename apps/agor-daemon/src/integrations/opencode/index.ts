@@ -1,5 +1,6 @@
 import type { RegisterServicesContext } from '../../register-services.js';
 import { createOpenCodeAuthService } from './auth-service.js';
+import { createOpenCodeCustomProvidersService } from './custom-providers-service.js';
 import { createOpenCodeModelsService } from './models-service.js';
 
 /** Thin host composition for package-owned OpenCode auth and catalog operations. */
@@ -13,4 +14,11 @@ export function registerOpenCodeServices(
   ctx.app.use('/opencode-models', createOpenCodeModelsService(ctx.db, ctx.config));
   ctx.app.service('/opencode-models').hooks({ before: { all: [ctx.requireAuth] } });
   ctx.app.service('/opencode-models').publish(() => []);
+
+  ctx.app.use(
+    '/opencode-custom-providers',
+    createOpenCodeCustomProvidersService(ctx.db, ctx.config)
+  );
+  ctx.app.service('/opencode-custom-providers').hooks({ before: { all: [ctx.requireAuth] } });
+  ctx.app.service('/opencode-custom-providers').publish(() => []);
 }

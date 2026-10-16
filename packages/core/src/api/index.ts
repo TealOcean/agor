@@ -65,6 +65,10 @@ import type {
   Message,
   MessageCreate,
   MessagePatch,
+  OpenCodeCustomProviderCreateRequest,
+  OpenCodeCustomProviderPatchRequest,
+  OpenCodeCustomProviderProbeRequest,
+  OpenCodeCustomProviderProbeResult,
   OpenCodeModelCatalog,
   OpenCodeOAuthAttempt,
   OpenCodeOAuthAttemptPatch,
@@ -345,6 +349,7 @@ export interface ServiceTypes {
   'agentic-tool-presets': AgenticToolPreset;
   'opencode-auth': OpenCodeProviderSettings;
   'opencode-models': OpenCodeModelCatalog;
+  'opencode-custom-providers': OpenCodeProviderSettings;
   'executor-git-environment': ExecutorGitEnvironment;
 }
 
@@ -470,6 +475,23 @@ export interface KnowledgeReindexService {
     data?: Record<string, never>,
     params?: Params
   ): Promise<{ queued: number; status: KnowledgeEmbeddingStatus }>;
+}
+
+export interface OpenCodeCustomProvidersService {
+  create(
+    data: OpenCodeCustomProviderProbeRequest,
+    params?: Params
+  ): Promise<OpenCodeCustomProviderProbeResult>;
+  create(
+    data: OpenCodeCustomProviderCreateRequest,
+    params?: Params
+  ): Promise<OpenCodeProviderSettings>;
+  patch(
+    id: string,
+    data: OpenCodeCustomProviderPatchRequest,
+    params?: Params
+  ): Promise<OpenCodeProviderSettings>;
+  remove(id: string, params?: Params): Promise<OpenCodeProviderSettings>;
 }
 
 export interface OpenCodeAuthService {
@@ -914,6 +936,7 @@ export interface AgorClient
   service(path: 'agentic-tool-presets'): AgenticToolPresetsService;
   service(path: 'opencode-auth'): OpenCodeAuthService;
   service(path: 'opencode-models'): OpenCodeModelsService;
+  service(path: 'opencode-custom-providers'): OpenCodeCustomProvidersService;
   service(path: `board-comments/${string}/reposition`): BoardCommentRepositionService;
 
   // Standard services (CRUD only)

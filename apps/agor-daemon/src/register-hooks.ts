@@ -593,6 +593,7 @@ export const TENANT_IDENTITY_ONLY_SERVICE_PATHS = [
   'claude-auth/logout',
   'opencode-auth',
   'opencode-models',
+  'opencode-custom-providers',
   'claude-models',
   'copilot-models',
   'cursor-models',
@@ -685,6 +686,7 @@ export const CONSTRAINED_HA_PROCESS_AFFINE_SERVICE_GATES = [
   // Claude logout enforces mode-aware cleanup internally, including unavailable backend grants.
   ['opencode-auth', 'openCodeAuth'],
   ['opencode-models', 'openCodeAuth'],
+  ['opencode-custom-providers', 'openCodeAuth'],
 ] as const satisfies ReadonlyArray<readonly [string, Parameters<typeof rejectInConstrainedHa>[1]]>;
 
 /** Hosted OpenCode keeps no daemon-local native state, so any replica may serve its settings. */
