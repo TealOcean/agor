@@ -2,6 +2,7 @@ import type { AgorClient } from '@agor/core/client';
 import type { OpenCodeOAuthAttempt, OpenCodeProviderSettings as Settings } from '@agor/core/types';
 import { Alert, Button, List, Select, Space, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { OpenCodeCustomProviders } from './OpenCodeCustomProviders.js';
 import {
   isActiveOAuthAttempt,
   OpenCodeProviderListItem,
@@ -216,9 +217,22 @@ export function OpenCodeProviderSettings({
     publishSettings,
   ]);
 
-  const connectableProviders = useMemo(
-    () => settings?.providers.filter((provider) => provider.credentialPresence !== 'present') ?? [],
+  const customProviderIds = useMemo(
+    () =>
+      new Set(
+        settings?.runtime === 'available'
+          ? (settings.customProviders ?? []).map((provider) => provider.id)
+          : []
+      ),
     [settings]
+  );
+  const connectableProviders = useMemo(
+    () =>
+      settings?.providers.filter(
+        (provider) =>
+          provider.credentialPresence !== 'present' && !customProviderIds.has(provider.id)
+      ) ?? [],
+    [settings, customProviderIds]
   );
   const selectedProvider = connectableProviders.find(
     (provider) => provider.id === selectedProviderId
@@ -226,9 +240,10 @@ export function OpenCodeProviderSettings({
   const visibleProviders =
     settings?.providers.filter(
       (provider) =>
-        provider.credentialPresence === 'present' ||
-        provider.runtimeAvailable ||
-        provider.id === selectedProvider?.id
+        !customProviderIds.has(provider.id) &&
+        (provider.credentialPresence === 'present' ||
+          provider.runtimeAvailable ||
+          provider.id === selectedProvider?.id)
     ) ?? [];
 
   useEffect(() => {
@@ -421,6 +436,9 @@ export function OpenCodeProviderSettings({
               }
             : {})}
         />
+      )}
+      {settings?.runtime === 'available' && settings.isolation.mode !== 'managed-projection' && (
+        <OpenCodeCustomProviders client={client} settings={settings} onSettings={publishSettings} />
       )}
       <Select
         allowClear

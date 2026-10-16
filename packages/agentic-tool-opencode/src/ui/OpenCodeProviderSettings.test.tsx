@@ -2,7 +2,7 @@
 
 import type { AgorClient } from '@agor/core/client';
 import type { OpenCodeProviderSettings as Settings } from '@agor/core/types';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { describe, expect, it, vi } from 'vitest';
 import { OpenCodeProviderSettings } from './OpenCodeProviderSettings.js';
@@ -1223,5 +1223,47 @@ describe('OpenCodeProviderSettings', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows custom providers in their own section and not in the built-in list', async () => {
+    const withCustom = {
+      ...initial,
+      providers: [
+        ...initial.providers,
+        {
+          id: 'omlx',
+          name: 'oMLX',
+          runtimeAvailable: true,
+          credentialPresence: 'present',
+          models: [],
+          authMethods: [],
+        },
+      ],
+      customProviders: [
+        {
+          id: 'omlx',
+          name: 'oMLX',
+          apiType: 'chat-completions',
+          baseURL: 'http://h/v1',
+          models: [{ id: 'a' }],
+          credentialPresence: 'present',
+        },
+      ],
+    } as Settings;
+    renderSettings(createAuthService({ find: vi.fn().mockResolvedValue(withCustom) }));
+
+    const section = await screen.findByTestId('opencode-custom-providers');
+    expect(within(section).getByText('oMLX')).toBeInTheDocument();
+    expect(screen.getAllByText('oMLX')).toHaveLength(1);
+  });
+
+  it('does not show the custom providers section in hosted workspaces', async () => {
+    const hosted = {
+      ...initial,
+      isolation: { mode: 'managed-projection', boundary: 'executor-run' },
+    } as Settings;
+    renderSettings(createAuthService({ find: vi.fn().mockResolvedValue(hosted) }));
+    await screen.findByText(/Save an API key for a supported provider/);
+    expect(screen.queryByTestId('opencode-custom-providers')).toBeNull();
   });
 });
